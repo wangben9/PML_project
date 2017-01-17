@@ -1,0 +1,88 @@
+---
+title: "Practical Machine Learning Project"
+author: "Ben Wang"
+date: "15/01/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/wangben/Dropbox/Courses & Exams/Data Analytics/Data Science Specialization - JHU/Working/Pratical Machine Learning")
+library(ggplot2)
+library(lattice)
+library(caret)
+library(randomForest)
+library(gbm)
+library(RANN)
+```
+
+## Introduction
+In this project, we use the exercise data to find a classifier which identifies the manner in which the participants exercise.
+
+## Load Data and Cleaning the Data
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+We load the training and testing data. We also remove the bad data points, e.g. NA, DIV/0 etc.
+```{r preProcessing, cache=TRUE}
+#load data
+raw_data <- read.csv("./data/pml-training.csv", 
+                     sep = ",",
+                     na.strings = c("NA","#DIV/0!",""))
+preTesting <- read.csv("./data/pml-testing.csv", 
+                       sep = ",",
+                       na.strings = c("NA","#DIV/0!",""))
+
+features <- names(preTesting[,colSums(is.na(preTesting)) == 0])[8:59]
+
+# Only use features used in testing cases.
+raw_data <- raw_data[,c(features,"classe")]
+preTesting <- preTesting[,c(features,"problem_id")]
+
+dim(raw_data); 
+dim(preTesting);
+```
+
+
+## Create Validation Dataset
+Here, we split the data pml-training into training data (60%) and validation data (40%). The classifier trainied based on training data will be checked by using validation data. This shouldn't be confused with pml-testing dataset.
+```{r partition}
+# Split raw training into training and validating
+inTrain = createDataPartition(raw_data$classe, p = 0.6)[[1]]
+preTraining = raw_data[inTrain,]
+preValidating = raw_data[-inTrain,]
+
+```
+
+## Explanatory Data Analysis
+Two EDA charts are plotted to explore the data.
+
+```{r EDA, cache=TRUE}
+featurePlot(x = preTraining[,c("roll_belt", "pitch_belt", "yaw_belt")],
+            y = preTraining$classe,
+            plot = "pairs")
+qplot(roll_belt, pitch_belt, col = classe, data=preTraining)
+```
+
+## Train the Classifier
+Since the number of labels are `r nlevels(preTraining$classe)`, the linear classification model would be slow. Thus, I start with nonliner model - **randomForest** directly.
+```{r trainClassifier, cache=TRUE}
+modRF <- randomForest(classe~., data=preTraining, method = "class")
+predRF <- predict(modRF, preValidating, method = "class")
+```
+
+Below are the summary of performance of classifier on the validation data set. 
+```{r results, cache=TRUE}
+confusionMatrix(preValidating$classe, predRF)
+```
+The accuracy is very high. Thus, we proceed to apply the prediction model on testing data.
+
+## Prediction
+Below are the prediction of testing dataset.
+```{r predict, cache=TRUE}
+predRF_test <- predict(modRF, preTesting, method = "class")
+print(predRF_test)
+```
